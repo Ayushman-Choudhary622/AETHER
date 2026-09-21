@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AtSign, User, Sparkles, Shield, Check, Globe, Camera, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { AtSign, User, Sparkles, Shield, Check, Globe, Camera, ArrowRight, Lock, CheckCircle2, Upload } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import BrandLogo from '../common/BrandLogo';
 
@@ -20,12 +20,28 @@ export default function UsernameOnboardingModal() {
     setIsProfileModalOpen 
   } = useChat();
 
+  const fileInputRef = useRef(null);
   const [step, setStep] = useState(myProfile?.hasCompletedOnboarding ? 2 : 1);
   const [username, setUsername] = useState(myProfile?.username || '');
   const [displayName, setDisplayName] = useState(myProfile?.name || '');
   const [about, setAbout] = useState(myProfile?.about || 'Available on AETHER 🛡️✨');
   const [selectedAvatar, setSelectedAvatar] = useState(myProfile?.avatar || PRESET_AVATARS[0]);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleCustomAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setErrorMsg('Image file must be under 8MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedAvatar(reader.result);
+      setErrorMsg('');
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Should show if user hasn't completed onboarding, or if explicitly opened from settings
   const shouldShow = !myProfile?.hasCompletedOnboarding || isProfileModalOpen;
@@ -228,24 +244,99 @@ export default function UsernameOnboardingModal() {
         {step === 2 && (
           <form onSubmit={handleFinish} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
             {/* Avatar Selector */}
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center' }}>
-                Select Profile Photo
+                Profile Photo / DP
               </label>
+
+              {/* Big Avatar Preview with Camera Trigger */}
+              <div style={{ position: 'relative', width: '84px', height: '84px', marginBottom: '14px' }}>
+                <img
+                  src={selectedAvatar}
+                  alt="Avatar Preview"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '3px solid var(--primary)',
+                    boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload from device"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-2px',
+                    right: '-2px',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid var(--bg-modal)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Camera size={14} />
+                </button>
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleCustomAvatarUpload}
+                style={{ display: 'none' }}
+              />
+
+              {/* Upload Custom Photo Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  color: 'var(--accent-cyan)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  marginBottom: '14px'
+                }}
+              >
+                <Upload size={14} /> Upload Custom Photo
+              </button>
+
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Or select an AETHER avatar:
+              </span>
+
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                 {PRESET_AVATARS.map((url, idx) => (
                   <div
                     key={idx}
                     onClick={() => setSelectedAvatar(url)}
                     style={{
-                      width: '52px',
-                      height: '52px',
+                      width: '44px',
+                      height: '44px',
                       borderRadius: '50%',
                       padding: '2px',
                       cursor: 'pointer',
-                      border: selectedAvatar === url ? '3px solid var(--primary)' : '2px solid transparent',
-                      boxShadow: selectedAvatar === url ? '0 0 14px var(--primary)' : 'none',
-                      transform: selectedAvatar === url ? 'scale(1.12)' : 'scale(1)',
+                      border: selectedAvatar === url ? '2.5px solid var(--primary)' : '2px solid transparent',
+                      boxShadow: selectedAvatar === url ? '0 0 10px var(--primary)' : 'none',
+                      transform: selectedAvatar === url ? 'scale(1.1)' : 'scale(1)',
                       transition: 'all 0.15s'
                     }}
                   >

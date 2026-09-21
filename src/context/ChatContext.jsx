@@ -160,6 +160,92 @@ export function ChatProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
 
+  // In-Chat Message Search
+  const [inChatSearchQuery, setInChatSearchQuery] = useState('');
+  const [isInChatSearchOpen, setIsInChatSearchOpen] = useState(false);
+
+  // Blocked Contacts Management (persisted in localStorage)
+  const [blockedContacts, setBlockedContacts] = useState(() => {
+    const saved = localStorage.getItem('aether_blocked_contacts');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('aether_blocked_contacts', JSON.stringify(blockedContacts));
+  }, [blockedContacts]);
+
+  const blockContact = (username) => {
+    if (!username) return;
+    const clean = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (soundEnabled) soundEffects.playTap();
+    setBlockedContacts(prev => prev.includes(clean) ? prev : [...prev, clean]);
+  };
+
+  const unblockContact = (username) => {
+    if (!username) return;
+    const clean = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (soundEnabled) soundEffects.playTap();
+    setBlockedContacts(prev => prev.filter(u => u !== clean));
+  };
+
+  const isContactBlocked = (username) => {
+    if (!username) return false;
+    const clean = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    return blockedContacts.includes(clean);
+  };
+
+  // Privacy & Stealth Settings (Ghost Mode, Incognito Typing, Read Receipts)
+  const [privacySettings, setPrivacySettings] = useState(() => {
+    const saved = localStorage.getItem('aether_privacy_settings');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      ghostMode: false,
+      incognitoTyping: false,
+      readReceipts: true
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('aether_privacy_settings', JSON.stringify(privacySettings));
+  }, [privacySettings]);
+
+  const updatePrivacySettings = (newSettings) => {
+    setPrivacySettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  // Account Lifecycle: Logout & Delete Account
+  const logout = () => {
+    cloudMessaging.disconnect();
+    webrtcService.destroy();
+    const updatedProfile = {
+      ...myProfile,
+      hasCompletedOnboarding: false
+    };
+    setMyProfile(updatedProfile);
+    localStorage.setItem('aether_my_profile', JSON.stringify(updatedProfile));
+    setActiveChatId(null);
+    setIsSettingsOpen(false);
+  };
+
+  const deleteAccount = () => {
+    cloudMessaging.disconnect();
+    webrtcService.destroy();
+    localStorage.clear();
+    setMyProfile(defaultUserProfile);
+    setChats([]);
+    setStatuses(initialStatuses);
+    setChannels([]);
+    setCallLogs([]);
+    setBlockedContacts([]);
+    setActiveChatId(null);
+    setIsSettingsOpen(false);
+  };
+
   // Modals & Overlays
   const [activeCall, setActiveCall] = useState(null);
   const [remoteVideoStream, setRemoteVideoStream] = useState(null);
@@ -255,6 +341,35 @@ export function ChatProvider({ children }) {
     const sender = msgData.senderUsername;
     if (!sender || sender === myProfile.username) return;
 
+    // Ignore if contact is blocked
+    if (isContactBlocked(sender)) return;
+
+    // Handle remote message deletion (Delete for everyone)
+    if (msgData.type === 'DELETE_MESSAGE' && msgData.targetMessageId) {
+      setChats(prevChats => prevChats.map(c => {
+        if (c.username === sender || c.id === `chat_${sender}`) {
+          return {
+            ...c,
+            messages: c.messages.map(m => {
+              if (m.id === msgData.targetMessageId) {
+                return {
+                  ...m,
+                  deleted: true,
+                  text: '🚫 This message was deleted',
+                  mediaUrl: null,
+                  fileName: null,
+                  caption: ''
+                };
+              }
+              return m;
+            })
+          };
+        }
+        return c;
+      }));
+      return;
+    }
+
     if (soundEnabled) {
       soundEffects.playReceived();
     }
@@ -270,6 +385,8 @@ export function ChatProvider({ children }) {
       fileName: msgData.fileName || null,
       fileSize: msgData.fileSize || null,
       audioDuration: msgData.audioDuration || null,
+      viewOnce: !!msgData.viewOnce,
+      viewOnceOpened: false,
       timestamp: getCurrentTimeString(),
       status: 'read'
     };
@@ -310,6 +427,8 @@ export function ChatProvider({ children }) {
 
   // Handle incoming call signal
   const handleIncomingCallSignal = (callData) => {
+    if (callData.fromUsername && isContactBlocked(callData.fromUsername)) return;
+
     if (callData.type === 'CALL_INVITE') {
       if (soundEnabled) soundEffects.startCallingTone();
       setActiveCall({
@@ -328,8 +447,14 @@ export function ChatProvider({ children }) {
   };
 
   // Send Message (Syncs to both local UI and Cloud Real-Time Mesh)
-  const sendMessage = ({ text = '', type = 'text', mediaUrl = null, caption = '', fileName = null, fileSize = null, audioDuration = null }) => {
+  const sendMessage = ({ text = '', type = 'text', mediaUrl = null, caption = '', fileName = null, fileSize = null, audioDuration = null, viewOnce = false }) => {
     if (!activeChat) return;
+
+    // Disallow sending if contact is blocked
+    if (activeChat.username && isContactBlocked(activeChat.username)) {
+      alert("You cannot send messages to a blocked contact. Unblock them first.");
+      return;
+    }
 
     if (soundEnabled) {
       soundEffects.playSent();
@@ -346,6 +471,9 @@ export function ChatProvider({ children }) {
       fileName,
       fileSize,
       audioDuration,
+      viewOnce,
+      viewOnceOpened: false,
+      starred: false,
       timestamp: getCurrentTimeString(),
       status: 'sent',
       replyTo: replyMessage ? {
@@ -380,7 +508,8 @@ export function ChatProvider({ children }) {
         caption,
         fileName,
         fileSize,
-        audioDuration
+        audioDuration,
+        viewOnce
       });
     }
 
@@ -396,7 +525,6 @@ export function ChatProvider({ children }) {
         return c;
       }));
     }, 500);
-
   };
 
   // Call Initiation with WebRTC
@@ -536,17 +664,145 @@ export function ChatProvider({ children }) {
     }));
   };
 
-  const deleteMessage = (chatId, messageId) => {
+  const deleteMessage = (chatId, messageId, mode = 'for_me') => {
+    if (soundEnabled) soundEffects.playTap();
+    const chat = chats.find(c => c.id === chatId);
+    const targetUsername = chat?.username || (chat?.name && chat.name.startsWith('@') ? chat.name.replace('@', '') : null);
+
+    if (mode === 'for_everyone') {
+      // Broadcast deletion signal to peer so their screen immediately reflects the deleted message
+      if (targetUsername) {
+        cloudMessaging.sendDirectMessage(targetUsername, {
+          type: 'DELETE_MESSAGE',
+          targetMessageId: messageId
+        });
+      }
+
+      setChats(prev => prev.map(c => {
+        if (c.id === chatId) {
+          return {
+            ...c,
+            messages: c.messages.map(m => {
+              if (m.id === messageId) {
+                return {
+                  ...m,
+                  deleted: true,
+                  text: '🚫 This message was deleted',
+                  mediaUrl: null,
+                  fileName: null,
+                  caption: ''
+                };
+              }
+              return m;
+            })
+          };
+        }
+        return c;
+      }));
+    } else {
+      // Delete for me
+      setChats(prev => prev.map(c => {
+        if (c.id === chatId) {
+          return {
+            ...c,
+            messages: c.messages.filter(m => m.id !== messageId)
+          };
+        }
+        return c;
+      }));
+    }
+  };
+
+  const clearChat = (chatId) => {
     if (soundEnabled) soundEffects.playTap();
     setChats(prev => prev.map(c => {
       if (c.id === chatId) {
         return {
           ...c,
-          messages: c.messages.filter(m => m.id !== messageId)
+          unreadCount: 0,
+          messages: []
         };
       }
       return c;
     }));
+  };
+
+  const deleteChat = (chatId) => {
+    if (soundEnabled) soundEffects.playTap();
+    setChats(prev => prev.filter(c => c.id !== chatId));
+    if (activeChatId === chatId) {
+      setActiveChatId(null);
+    }
+    setIsContactInfoOpen(false);
+  };
+
+  const toggleStarMessage = (chatId, messageId) => {
+    if (soundEnabled) soundEffects.playTap();
+    setChats(prev => prev.map(c => {
+      if (c.id === chatId) {
+        return {
+          ...c,
+          messages: c.messages.map(m => {
+            if (m.id === messageId) {
+              return { ...m, starred: !m.starred };
+            }
+            return m;
+          })
+        };
+      }
+      return c;
+    }));
+  };
+
+  const setDisappearingTimer = (chatId, duration) => {
+    if (soundEnabled) soundEffects.playTap();
+    setChats(prev => prev.map(c => {
+      if (c.id === chatId) {
+        return { ...c, disappearingTimer: duration };
+      }
+      return c;
+    }));
+  };
+
+  const markViewOnceOpened = (chatId, messageId) => {
+    setChats(prev => prev.map(c => {
+      if (c.id === chatId) {
+        return {
+          ...c,
+          messages: c.messages.map(m => {
+            if (m.id === messageId) {
+              return { ...m, viewOnceOpened: true, mediaUrl: null };
+            }
+            return m;
+          })
+        };
+      }
+      return c;
+    }));
+  };
+
+  const exportChatHistory = (chatId) => {
+    if (soundEnabled) soundEffects.playTap();
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !chat.messages || chat.messages.length === 0) {
+      alert("No messages to export.");
+      return;
+    }
+    const transcript = chat.messages.map(m => {
+      return `[${m.timestamp}] ${m.senderName || m.senderId}: ${m.deleted ? '[Deleted Message]' : (m.text || m.type + ' attachment')}`;
+    }).join('\n');
+
+    const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AETHER_Chat_${(chat.name || 'Chat').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const uploadCustomAvatar = (dataUrl) => {
+    updateMyProfile({ avatar: dataUrl });
   };
 
   const togglePinChat = (chatId) => {
@@ -624,6 +880,7 @@ export function ChatProvider({ children }) {
         setSoundEnabled,
         myProfile,
         updateMyProfile,
+        uploadCustomAvatar,
         isProfileModalOpen,
         setIsProfileModalOpen,
         discoveredUsers,
@@ -632,7 +889,7 @@ export function ChatProvider({ children }) {
         activeChatId,
         setActiveChatId: (id) => {
           setActiveChatId(id);
-          markChatRead(id);
+          if (id) markChatRead(id);
         },
         activeChat,
         isContactInfoOpen,
@@ -642,11 +899,21 @@ export function ChatProvider({ children }) {
         callLogs,
         searchQuery,
         setSearchQuery,
+        inChatSearchQuery,
+        setInChatSearchQuery,
+        isInChatSearchOpen,
+        setIsInChatSearchOpen,
         activeFilter,
         setActiveFilter,
         sendMessage,
         reactToMessage,
         deleteMessage,
+        clearChat,
+        deleteChat,
+        exportChatHistory,
+        toggleStarMessage,
+        setDisappearingTimer,
+        markViewOnceOpened,
         togglePinChat,
         toggleMuteChat,
         toggleFavoriteChat,
@@ -654,6 +921,14 @@ export function ChatProvider({ children }) {
         replyMessage,
         setReplyMessage,
         typingContacts,
+        blockedContacts,
+        blockContact,
+        unblockContact,
+        isContactBlocked,
+        privacySettings,
+        updatePrivacySettings,
+        logout,
+        deleteAccount,
         activeCall,
         startCall,
         answerCall,

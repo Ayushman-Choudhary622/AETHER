@@ -15,7 +15,11 @@ import {
   Image as ImageIcon,
   FileText,
   Link as LinkIcon,
-  QrCode
+  QrCode,
+  Trash2,
+  Download,
+  CheckCircle,
+  MessageSquare
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 
@@ -25,16 +29,47 @@ export default function ContactDrawer() {
     isContactInfoOpen, 
     setIsContactInfoOpen, 
     startCall, 
-    toggleMuteChat 
+    toggleMuteChat,
+    blockedContacts,
+    blockContact,
+    unblockContact,
+    isContactBlocked,
+    clearChat,
+    deleteChat,
+    setDisappearingTimer
   } = useChat();
 
-  const [activeMediaTab, setActiveMediaTab] = useState('media'); // 'media' | 'docs' | 'links'
+  const [activeMediaTab, setActiveMediaTab] = useState('media'); // 'media' | 'docs' | 'starred'
 
   if (!isContactInfoOpen || !activeChat) return null;
 
-  // Extract media from messages
-  const mediaMessages = activeChat.messages.filter(m => m.type === 'image');
-  const docMessages = activeChat.messages.filter(m => m.type === 'document');
+  // Extract media and starred from messages
+  const mediaMessages = activeChat.messages.filter(m => m.type === 'image' && !m.deleted);
+  const docMessages = activeChat.messages.filter(m => m.type === 'document' && !m.deleted);
+  const starredMessages = activeChat.messages.filter(m => m.starred && !m.deleted);
+
+  const isBlocked = activeChat.username ? isContactBlocked(activeChat.username) : false;
+  const currentTimer = activeChat.disappearingTimer || 'off';
+
+  const handleCycleDisappearingTimer = () => {
+    const next = currentTimer === 'off' ? '24h' : currentTimer === '24h' ? '7d' : 'off';
+    setDisappearingTimer(activeChat.id, next);
+  };
+
+  const exportChatHistory = () => {
+    if (!activeChat?.messages) return;
+    const transcript = activeChat.messages.map(m => {
+      return `[${m.timestamp}] ${m.senderName || m.senderId}: ${m.deleted ? '[Deleted Message]' : (m.text || m.type + ' attachment')}`;
+    }).join('\n');
+
+    const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AETHER_Chat_${activeChat.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <aside
@@ -99,7 +134,7 @@ export default function ContactDrawer() {
         </h2>
 
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-          {activeChat.phone || '+1 (555) 019-2834'}
+          {activeChat.username ? `@${activeChat.username}` : activeChat.phone || 'AETHER User'}
         </p>
 
         {/* Action Call Triggers */}
@@ -117,7 +152,8 @@ export default function ContactDrawer() {
               gap: '8px',
               fontSize: '13px',
               fontWeight: 600,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              cursor: 'pointer'
             }}
           >
             <Phone size={15} /> Audio
@@ -135,7 +171,8 @@ export default function ContactDrawer() {
               gap: '8px',
               fontSize: '13px',
               fontWeight: 600,
-              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)'
+              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+              cursor: 'pointer'
             }}
           >
             <Video size={15} /> Video
@@ -153,30 +190,31 @@ export default function ContactDrawer() {
         </p>
       </div>
 
-      {/* Media, Docs, Links Section */}
+      {/* Media, Docs & Starred Section */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-            Media, Docs &amp; Links
+            Media, Docs &amp; Starred
           </span>
           <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>
-            {mediaMessages.length + docMessages.length} items
+            {mediaMessages.length + docMessages.length + starredMessages.length} items
           </span>
         </div>
 
-        {/* Media Tabs */}
+        {/* Tabs */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
           {[
             { id: 'media', label: 'Media', count: mediaMessages.length },
-            { id: 'docs', label: 'Docs', count: docMessages.length }
+            { id: 'docs', label: 'Docs', count: docMessages.length },
+            { id: 'starred', label: 'Starred', count: starredMessages.length }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveMediaTab(tab.id)}
               style={{
-                padding: '4px 12px',
+                padding: '4px 10px',
                 borderRadius: '8px',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 600,
                 backgroundColor: activeMediaTab === tab.id ? 'var(--primary)' : 'var(--bg-sidebar-hover)',
                 color: activeMediaTab === tab.id ? '#FFFFFF' : 'var(--text-secondary)',
@@ -189,8 +227,8 @@ export default function ContactDrawer() {
           ))}
         </div>
 
-        {/* Grid Preview */}
-        {activeMediaTab === 'media' ? (
+        {/* Content View */}
+        {activeMediaTab === 'media' && (
           mediaMessages.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
               {mediaMessages.map(m => (
@@ -204,7 +242,9 @@ export default function ContactDrawer() {
               No media shared yet
             </p>
           )
-        ) : (
+        )}
+
+        {activeMediaTab === 'docs' && (
           docMessages.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {docMessages.map(m => (
@@ -217,6 +257,28 @@ export default function ContactDrawer() {
           ) : (
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>
               No documents shared yet
+            </p>
+          )
+        )}
+
+        {activeMediaTab === 'starred' && (
+          starredMessages.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {starredMessages.map(m => (
+                <div key={m.id} style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: 'var(--bg-sidebar-hover)', fontSize: '12.5px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--accent-amber)', marginBottom: '4px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600 }}>
+                      <Star size={12} fill="currentColor" /> Starred
+                    </span>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>{m.timestamp}</span>
+                  </div>
+                  <p style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}>{m.text || 'Media attachment'}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>
+              No starred messages in this chat
             </p>
           )
         )}
@@ -251,8 +313,9 @@ export default function ContactDrawer() {
         </div>
       </div>
 
-      {/* Settings Options */}
-      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      {/* Settings & Danger Zone Options */}
+      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* Mute Notifications */}
         <button
           onClick={() => toggleMuteChat(activeChat.id)}
           style={{
@@ -263,7 +326,8 @@ export default function ContactDrawer() {
             borderRadius: '10px',
             color: 'var(--text-primary)',
             fontSize: '13.5px',
-            transition: 'background 0.15s'
+            transition: 'background 0.15s',
+            cursor: 'pointer'
           }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -277,7 +341,9 @@ export default function ContactDrawer() {
           </span>
         </button>
 
+        {/* Disappearing Messages */}
         <button
+          onClick={handleCycleDisappearingTimer}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -286,38 +352,114 @@ export default function ContactDrawer() {
             borderRadius: '10px',
             color: 'var(--text-primary)',
             fontSize: '13.5px',
-            transition: 'background 0.15s'
+            transition: 'background 0.15s',
+            cursor: 'pointer'
           }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Clock size={18} />
+            <Clock size={18} color={currentTimer !== 'off' ? 'var(--accent-cyan)' : 'inherit'} />
             <span>Disappearing Messages</span>
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Off</span>
+          <span style={{ fontSize: '12px', color: currentTimer !== 'off' ? 'var(--accent-cyan)' : 'var(--text-muted)', fontWeight: 600 }}>
+            {currentTimer === '24h' ? '24 Hours' : currentTimer === '7d' ? '7 Days' : 'Off'}
+          </span>
         </button>
 
+        {/* Export Chat History */}
         <button
+          onClick={exportChatHistory}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px',
+            borderRadius: '10px',
+            color: 'var(--text-primary)',
+            fontSize: '13.5px',
+            transition: 'background 0.15s',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Download size={18} color="var(--primary)" />
+            <span>Export Chat History</span>
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--primary)' }}>.TXT</span>
+        </button>
+
+        {/* Clear Messages */}
+        <button
+          onClick={() => {
+            if (window.confirm(`Clear all messages in chat with ${activeChat.name}?`)) {
+              clearChat(activeChat.id);
+            }
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
             padding: '12px',
             borderRadius: '10px',
-            color: 'var(--accent-rose)',
+            color: 'var(--text-secondary)',
             fontSize: '13.5px',
-            marginTop: '8px',
-            transition: 'background 0.15s'
+            transition: 'background 0.15s',
+            cursor: 'pointer'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(244, 63, 94, 0.1)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)';
+            e.currentTarget.style.color = 'var(--accent-rose)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }}
+        >
+          <Trash2 size={18} />
+          <span>Clear Messages</span>
+        </button>
+
+        {/* Block / Unblock Contact */}
+        <button
+          onClick={() => {
+            if (activeChat.username) {
+              if (isBlocked) {
+                unblockContact(activeChat.username);
+              } else {
+                blockContact(activeChat.username);
+              }
+            }
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '12px',
+            borderRadius: '10px',
+            color: isBlocked ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+            backgroundColor: isBlocked ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+            fontSize: '13.5px',
+            marginTop: '4px',
+            transition: 'background 0.15s',
+            cursor: 'pointer'
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = isBlocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.1)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = isBlocked ? 'rgba(16, 185, 129, 0.08)' : 'transparent'}
         >
           <Slash size={18} />
-          <span>Block {activeChat.name}</span>
+          <span>{isBlocked ? `Unblock ${activeChat.name}` : `Block ${activeChat.name}`}</span>
         </button>
 
+        {/* Delete Entire Chat */}
         <button
+          onClick={() => {
+            if (window.confirm(`Delete conversation with ${activeChat.name} completely?`)) {
+              deleteChat(activeChat.id);
+            }
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -326,13 +468,14 @@ export default function ContactDrawer() {
             borderRadius: '10px',
             color: 'var(--accent-rose)',
             fontSize: '13.5px',
-            transition: 'background 0.15s'
+            transition: 'background 0.15s',
+            cursor: 'pointer'
           }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(244, 63, 94, 0.1)'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
         >
-          <Flag size={18} />
-          <span>Report Contact</span>
+          <Trash2 size={18} />
+          <span>Delete Chat</span>
         </button>
       </div>
     </aside>

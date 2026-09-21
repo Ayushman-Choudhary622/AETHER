@@ -7,10 +7,9 @@ import {
   Image as ImageIcon, 
   FileText, 
   Camera, 
-  BarChart2, 
-  User, 
   X,
-  Sparkles
+  Sparkles,
+  Ban
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import EmojiPicker from './EmojiPicker';
@@ -18,19 +17,25 @@ import VoiceNoteRecorder from './VoiceNoteRecorder';
 
 export default function ChatInput() {
   const { 
+    activeChat,
     sendMessage, 
     replyMessage, 
-    setReplyMessage 
+    setReplyMessage,
+    isContactBlocked,
+    unblockContact
   } = useChat();
 
   const [text, setText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isViewOnce, setIsViewOnce] = useState(false);
 
   const textareaRef = useRef(null);
   const imageInputRef = useRef(null);
   const docInputRef = useRef(null);
+
+  const isBlocked = activeChat?.username ? isContactBlocked(activeChat.username) : false;
 
   // Auto resize textarea
   useEffect(() => {
@@ -42,8 +47,13 @@ export default function ChatInput() {
 
   const handleSend = () => {
     if (!text.trim()) return;
-    sendMessage({ text: text.trim(), type: 'text' });
+    sendMessage({ 
+      text: text.trim(), 
+      type: 'text',
+      viewOnce: isViewOnce
+    });
     setText('');
+    setIsViewOnce(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -69,9 +79,11 @@ export default function ChatInput() {
       sendMessage({
         type: 'image',
         mediaUrl: url,
-        caption: text.trim() || ''
+        caption: text.trim() || '',
+        viewOnce: isViewOnce
       });
       setText('');
+      setIsViewOnce(false);
       setShowAttachMenu(false);
     }
   };
@@ -95,6 +107,42 @@ export default function ChatInput() {
     });
     setIsRecordingVoice(false);
   };
+
+  if (isBlocked) {
+    return (
+      <div
+        className="glass-footer"
+        style={{
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          backgroundColor: 'var(--bg-panel)',
+          borderTop: '1px solid var(--border-subtle)',
+          color: 'var(--text-secondary)',
+          fontSize: '13.5px',
+          zIndex: 30
+        }}
+      >
+        <Ban size={16} color="var(--accent-rose)" />
+        <span>You cannot send messages to a blocked contact.</span>
+        <button
+          onClick={() => unblockContact(activeChat.username)}
+          style={{
+            color: 'var(--primary)',
+            fontWeight: 600,
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline'
+          }}
+        >
+          Unblock to chat
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -318,30 +366,59 @@ export default function ChatInput() {
               flex: 1,
               backgroundColor: 'var(--bg-input)',
               borderRadius: '20px',
-              padding: '8px 16px',
-              border: '1px solid var(--border-subtle)',
+              padding: '8px 14px 8px 16px',
+              border: isViewOnce ? '1px solid var(--accent-emerald)' : '1px solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
-              boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.2)'
+              gap: '6px',
+              boxShadow: isViewOnce ? '0 0 10px rgba(16, 185, 129, 0.25)' : 'inset 0 1px 4px rgba(0,0,0,0.2)',
+              transition: 'all 0.2s'
             }}
           >
             <textarea
               ref={textareaRef}
               rows={1}
-              placeholder="Type a message..."
+              placeholder={isViewOnce ? "Type a view-once message..." : "Type a message..."}
               value={text}
               onChange={e => setText(e.target.value)}
               onKeyDown={handleKeyDown}
               style={{
-                width: '100%',
+                flex: 1,
                 background: 'transparent',
                 resize: 'none',
                 fontSize: '14.5px',
                 lineHeight: 1.4,
                 color: 'var(--text-primary)',
-                maxHeight: '120px'
+                maxHeight: '120px',
+                border: 'none',
+                outline: 'none'
               }}
             />
+
+            {/* WhatsApp-Style View-Once Toggle (1) */}
+            <button
+              type="button"
+              onClick={() => setIsViewOnce(v => !v)}
+              title={isViewOnce ? "View Once Active (Recipient can view only once)" : "Set View Once (Recipient can view only once)"}
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                border: isViewOnce ? '2px solid var(--accent-emerald)' : '1.5px solid var(--text-muted)',
+                backgroundColor: isViewOnce ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                color: isViewOnce ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                flexShrink: 0
+              }}
+            >
+              ①
+            </button>
           </div>
 
           {/* Send OR Microphone Record Button */}
@@ -353,12 +430,12 @@ export default function ChatInput() {
                 width: '42px',
                 height: '42px',
                 borderRadius: '50%',
-                backgroundColor: 'var(--primary)',
+                backgroundColor: isViewOnce ? 'var(--accent-emerald)' : 'var(--primary)',
                 color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+                boxShadow: isViewOnce ? '0 2px 12px rgba(16, 185, 129, 0.45)' : '0 2px 10px rgba(99, 102, 241, 0.4)',
                 cursor: 'pointer',
                 flexShrink: 0,
                 transition: 'transform 0.15s'

@@ -1,15 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Lock, ArrowDown } from 'lucide-react';
+import { Lock, ArrowDown, Search } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 
 export default function MessageList({ onReplyMessage }) {
-  const { activeChat, typingContacts, setIsContactInfoOpen } = useChat();
+  const { activeChat, typingContacts, setIsContactInfoOpen, inChatSearchQuery } = useChat();
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const isTyping = typingContacts[activeChat?.id];
+
+  const messagesToDisplay = inChatSearchQuery?.trim()
+    ? (activeChat?.messages || []).filter(m => 
+        (m.text || m.caption || m.fileName || '').toLowerCase().includes(inChatSearchQuery.trim().toLowerCase())
+      )
+    : (activeChat?.messages || []);
 
   const scrollToBottom = (behavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -110,14 +116,22 @@ export default function MessageList({ onReplyMessage }) {
       </div>
 
       {/* Messages Render */}
-      {activeChat.messages.map((msg) => (
-        <MessageBubble
-          key={msg.id}
-          message={msg}
-          isGroup={activeChat.type === 'group'}
-          onReply={onReplyMessage}
-        />
-      ))}
+      {inChatSearchQuery?.trim() && messagesToDisplay.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+          <Search size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+          <p style={{ fontSize: '14px', fontWeight: 500 }}>No messages found matching "{inChatSearchQuery}"</p>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Check spelling or try a different keyword</span>
+        </div>
+      ) : (
+        messagesToDisplay.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            isGroup={activeChat.type === 'group'}
+            onReply={onReplyMessage}
+          />
+        ))
+      )}
 
       {/* WhatsApp-Style Typing Indicator Bubble */}
       {isTyping && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, ShieldCheck, MessageSquarePlus } from 'lucide-react';
+import { Lock, ShieldCheck, MessageSquarePlus, Ban } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
@@ -11,8 +11,12 @@ export default function ChatArea() {
   const { 
     activeChat, 
     setReplyMessage, 
-    setIsNewChatOpen 
+    setIsNewChatOpen,
+    isContactBlocked,
+    unblockContact
   } = useChat();
+
+  const isBlocked = activeChat?.username ? isContactBlocked(activeChat.username) : false;
 
   if (!activeChat) {
     return (
@@ -102,6 +106,40 @@ export default function ChatArea() {
         }}
       >
         <ChatHeader />
+        {isBlocked && (
+          <div
+            style={{
+              backgroundColor: 'rgba(244, 63, 94, 0.15)',
+              borderBottom: '1px solid rgba(244, 63, 94, 0.3)',
+              padding: '10px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              zIndex: 25
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-rose)', fontSize: '13px', fontWeight: 500 }}>
+              <Ban size={16} />
+              <span>You have blocked @{activeChat.username}. Messages and calls from this user are blocked.</span>
+            </div>
+            <button
+              onClick={() => unblockContact(activeChat.username)}
+              style={{
+                padding: '5px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--accent-rose)',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Unblock
+            </button>
+          </div>
+        )}
         <MessageList onReplyMessage={(msg) => setReplyMessage(msg)} />
         <ChatInput />
       </div>
