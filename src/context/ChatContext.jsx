@@ -3,6 +3,7 @@ import { initialChats, initialStatuses, initialChannels, initialCalls, defaultUs
 import { soundEffects } from '../utils/audio';
 import { cloudMessaging } from '../services/cloudMessaging';
 import { webrtcService } from '../services/webrtcService';
+import { userRegistry } from '../services/userRegistry';
 
 const ChatContext = createContext();
 
@@ -44,7 +45,7 @@ export function ChatProvider({ children }) {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const updateMyProfile = (newProfile) => {
-    const cleanUsername = newProfile.username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const cleanUsername = (newProfile.username || myProfile?.username || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
     const updated = {
       ...myProfile,
       ...newProfile,
@@ -54,10 +55,39 @@ export function ChatProvider({ children }) {
     };
     setMyProfile(updated);
     localStorage.setItem('aether_my_profile', JSON.stringify(updated));
+
+    // Register into global decentralized user registry & MQTT retained broker
+    userRegistry.registerUser(updated);
+    cloudMessaging.broadcastUserRegistration(updated);
   };
 
-  // Discovered Network Users (Real-Time Global Registry via MQTT Presence)
-  const [discoveredUsers, setDiscoveredUsers] = useState({});
+  // Discovered Network Users (Real-Time Global Decentralized Registry + MQTT)
+  const [discoveredUsers, setDiscoveredUsers] = useState(() => {
+    const all = {};
+    userRegistry.getAllUsers().forEach(u => {
+      all[u.username] = u;
+    });
+    return all;
+  });
+
+  useEffect(() => {
+    const unsubscribe = userRegistry.subscribe((directory) => {
+      setDiscoveredUsers(prev => ({
+        ...prev,
+        ...directory
+      }));
+    });
+
+    if (myProfile?.username && myProfile?.hasCompletedOnboarding) {
+      userRegistry.registerUser(myProfile);
+    }
+
+    return () => unsubscribe();
+  }, [myProfile?.username, myProfile?.hasCompletedOnboarding]);
+
+  const searchUserDirectory = (query) => {
+    return userRegistry.searchUsers(query, myProfile?.username);
+  };
 
   // Auto-purge any obsolete mock/prebuilt data from legacy sessions
   useEffect(() => {
@@ -887,6 +917,7 @@ export function ChatProvider({ children }) {
         isProfileModalOpen,
         setIsProfileModalOpen,
         discoveredUsers,
+        searchUserDirectory,
         startChatWithUsername,
         chats,
         activeChatId,

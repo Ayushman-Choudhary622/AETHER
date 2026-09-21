@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, 
   X, 
@@ -13,7 +13,9 @@ import {
   Archive,
   MessageSquare,
   Sparkles,
-  Users
+  Users,
+  Globe,
+  UserPlus
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import StatusView from '../status/StatusView';
@@ -31,7 +33,11 @@ export default function SidebarList() {
     activeFilter, 
     setActiveFilter, 
     setIsNewChatOpen,
-    typingContacts
+    typingContacts,
+    discoveredUsers,
+    searchUserDirectory,
+    startChatWithUsername,
+    myProfile
   } = useChat();
 
   // If not chats tab, delegate to specialized view
@@ -89,6 +95,24 @@ export default function SidebarList() {
     { id: 'groups', label: 'Groups' }
   ];
 
+  // Search global directory for suggestions when query is present
+  const suggestedGlobalUsers = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const results = searchUserDirectory ? searchUserDirectory(searchQuery) : [];
+    const activeUsernames = new Set(chats.map(c => (c.username || '').toLowerCase()));
+    return results.filter(u => !activeUsernames.has(u.username.toLowerCase()));
+  }, [searchQuery, searchUserDirectory, chats]);
+
+  // Suggested registered users when no chats exist and search is empty
+  const availableRegisteredUsers = useMemo(() => {
+    return Object.values(discoveredUsers || {}).filter(u => {
+      if (!u || !u.username) return false;
+      if (u.username === myProfile?.username) return false;
+      const inChats = chats.some(c => (c.username || '').toLowerCase() === u.username.toLowerCase());
+      return !inChats;
+    });
+  }, [discoveredUsers, myProfile?.username, chats]);
+
   return (
     <section
       className="aether-sidebar-list"
@@ -142,7 +166,7 @@ export default function SidebarList() {
         </div>
       </div>
 
-      {/* Search Bar (WhatsApp Web style) */}
+      {/* Search Bar (WhatsApp Web style with live suggestions) */}
       <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
         <div
           style={{
@@ -158,7 +182,7 @@ export default function SidebarList() {
           <Search size={16} color="var(--text-muted)" style={{ marginRight: '10px', flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Search or start new chat"
+            placeholder="Search by username or name"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             style={{
@@ -180,73 +204,287 @@ export default function SidebarList() {
       </div>
 
       {/* Filter Chips Pills */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '6px',
-          padding: '0 16px 12px',
-          overflowX: 'auto',
-          flexShrink: 0
-        }}
-      >
-        {filterTabs.map(tab => {
-          const isSelected = activeFilter === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
-              style={{
-                padding: '5px 14px',
-                borderRadius: '16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                backgroundColor: isSelected ? 'var(--primary)' : 'var(--bg-sidebar-hover)',
-                color: isSelected ? '#FFFFFF' : 'var(--text-secondary)',
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
-                transition: 'all 0.15s',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {!searchQuery.trim() && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '6px',
+            padding: '0 16px 12px',
+            overflowX: 'auto',
+            flexShrink: 0
+          }}
+        >
+          {filterTabs.map(tab => {
+            const isSelected = activeFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveFilter(tab.id)}
+                style={{
+                  padding: '5px 14px',
+                  borderRadius: '16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  backgroundColor: isSelected ? 'var(--primary)' : 'var(--bg-sidebar-hover)',
+                  color: isSelected ? '#FFFFFF' : 'var(--text-secondary)',
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Conversations List / Clean Slate Empty State */}
+      {/* Conversations List / Global User Directory Suggestions */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {sortedChats.length === 0 ? (
-          <div style={{ padding: '60px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        {/* If user is actively searching */}
+        {searchQuery.trim() ? (
+          <div>
+            {/* 1. Existing Conversations Matching Search */}
+            {sortedChats.length > 0 && (
+              <div>
+                <div style={{ padding: '8px 16px 4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Chats ({sortedChats.length})
+                </div>
+                {sortedChats.map(chat => {
+                  const isActive = chat.id === activeChatId;
+                  const messages = chat.messages || [];
+                  const lastMsg = messages[messages.length - 1];
+                  const isTyping = typingContacts[chat.id] || typingContacts[chat.username];
+
+                  return (
+                    <div
+                      key={chat.id}
+                      onClick={() => setActiveChatId(chat.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 16px',
+                        cursor: 'pointer',
+                        backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
+                        borderLeft: isActive ? '3px solid var(--primary)' : '3px solid transparent',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => !isActive && (e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)')}
+                      onMouseLeave={e => !isActive && (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
+                        <img
+                          src={chat.avatar}
+                          alt={chat.name}
+                          style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }}
+                        />
+                        {chat.online && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              right: '2px',
+                              width: '11px',
+                              height: '11px',
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--accent-emerald)',
+                              border: '2px solid var(--bg-sidebar)'
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                          <h4 style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {chat.name}
+                          </h4>
+                          {lastMsg && (
+                            <span style={{ fontSize: '11.5px', color: chat.unreadCount > 0 ? 'var(--primary)' : 'var(--text-muted)', flexShrink: 0 }}>
+                              {lastMsg.timestamp}
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <p style={{ fontSize: '13px', color: isTyping ? 'var(--accent-cyan)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>
+                            {isTyping ? 'typing...' : (lastMsg?.text || chat.lastMessage || '')}
+                          </p>
+                          {chat.unreadCount > 0 && (
+                            <span style={{ minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px', backgroundColor: 'var(--primary)', color: '#FFFFFF', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {chat.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 2. Global Registered Users Auto-Suggestions */}
+            {suggestedGlobalUsers.length > 0 && (
+              <div style={{ marginTop: sortedChats.length > 0 ? '12px' : '0' }}>
+                <div style={{ padding: '8px 16px 6px', fontSize: '11px', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Globe size={13} />
+                  <span>Registered Users ({suggestedGlobalUsers.length})</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 8px' }}>
+                  {suggestedGlobalUsers.map(user => (
+                    <div
+                      key={user.username}
+                      onClick={() => {
+                        startChatWithUsername(user.username, user);
+                        setSearchQuery('');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        borderRadius: '14px',
+                        backgroundColor: 'var(--bg-sidebar-hover)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.15s, background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'translateX(2px)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                        {user.avatar ? (
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '42px',
+                              height: '42px',
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#FFFFFF',
+                              fontWeight: 700,
+                              fontSize: '14px',
+                              flexShrink: 0
+                            }}
+                          >
+                            {(user.username || 'U').substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {user.name}
+                            </h4>
+                            <span style={{ fontSize: '11px', color: 'var(--accent-cyan)', backgroundColor: 'rgba(6, 182, 212, 0.12)', padding: '1px 6px', borderRadius: '6px' }}>
+                              @{user.username}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {user.about || 'Available on AETHER'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startChatWithUsername(user.username, user);
+                          setSearchQuery('');
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          backgroundColor: 'var(--primary)',
+                          color: '#FFFFFF',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          border: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          flexShrink: 0,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <UserPlus size={13} /> Chat
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3. No Matches Found */}
+            {sortedChats.length === 0 && suggestedGlobalUsers.length === 0 && (
+              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  No registered users found matching "{searchQuery}".
+                </p>
+                <button
+                  onClick={() => {
+                    startChatWithUsername(searchQuery.trim().replace(/^@/, ''));
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    marginTop: '12px',
+                    padding: '8px 18px',
+                    borderRadius: '14px',
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)'
+                  }}
+                >
+                  Start chat with @{searchQuery.trim().replace(/^@/, '')}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : sortedChats.length === 0 ? (
+          <div style={{ padding: '36px 20px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <div
               style={{
-                width: '64px',
-                height: '64px',
+                width: '60px',
+                height: '60px',
                 borderRadius: '50%',
                 backgroundColor: 'rgba(99, 102, 241, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'var(--primary)',
-                marginBottom: '16px'
+                marginBottom: '14px'
               }}
             >
-              <MessageSquare size={30} />
+              <MessageSquare size={28} />
             </div>
 
             <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
               No conversations yet
             </h3>
 
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5, maxWidth: '280px' }}>
-              Connect with friends anywhere in the world by searching their unique @username.
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: 1.5, maxWidth: '280px' }}>
+              Search for any friend by their @username or start a chat with registered users below.
             </p>
 
             <button
               onClick={() => setIsNewChatOpen(true)}
               style={{
-                marginTop: '20px',
-                padding: '10px 20px',
-                borderRadius: '20px',
+                marginTop: '16px',
+                padding: '9px 18px',
+                borderRadius: '18px',
                 backgroundColor: 'var(--primary)',
                 color: '#FFFFFF',
                 fontSize: '13px',
@@ -257,8 +495,78 @@ export default function SidebarList() {
                 boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)'
               }}
             >
-              <MessageSquarePlus size={16} /> Start New Chat
+              <MessageSquarePlus size={16} /> Find by Username
             </button>
+
+            {/* List of Available Registered Users on the Mesh */}
+            {availableRegisteredUsers.length > 0 && (
+              <div style={{ marginTop: '28px', width: '100%', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', padding: '0 4px' }}>
+                  <Globe size={13} color="var(--primary)" />
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                    Registered Users ({availableRegisteredUsers.length})
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {availableRegisteredUsers.map(user => (
+                    <div
+                      key={user.username}
+                      onClick={() => startChatWithUsername(user.username, user)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        borderRadius: '14px',
+                        backgroundColor: 'var(--bg-sidebar-hover)',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {user.avatar ? (
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '38px',
+                              height: '38px',
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#FFFFFF',
+                              fontWeight: 700,
+                              fontSize: '13px'
+                            }}
+                          >
+                            {(user.username || 'U').substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <h4 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {user.name}
+                          </h4>
+                          <span style={{ fontSize: '11.5px', color: 'var(--accent-cyan)' }}>
+                            @{user.username}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--primary)', padding: '4px 8px', borderRadius: '8px', backgroundColor: 'rgba(99, 102, 241, 0.12)' }}>
+                        Chat
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           sortedChats.map(chat => {
@@ -279,35 +587,23 @@ export default function SidebarList() {
                   cursor: 'pointer',
                   backgroundColor: isActive ? 'var(--bg-sidebar-active)' : 'transparent',
                   borderLeft: isActive ? '3px solid var(--primary)' : '3px solid transparent',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  transition: 'background 0.15s',
-                  position: 'relative'
+                  transition: 'background 0.15s'
                 }}
-                onMouseEnter={e => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)';
-                }}
-                onMouseLeave={e => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                }}
+                onMouseEnter={e => !isActive && (e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)')}
+                onMouseLeave={e => !isActive && (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                {/* Contact Avatar */}
                 <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
                   <img
-                    src={chat.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                    src={chat.avatar}
                     alt={chat.name}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      objectFit: 'cover'
-                    }}
+                    style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }}
                   />
                   {chat.online && (
                     <div
                       style={{
                         position: 'absolute',
-                        bottom: '1px',
-                        right: '1px',
+                        bottom: '2px',
+                        right: '2px',
                         width: '11px',
                         height: '11px',
                         borderRadius: '50%',
@@ -318,116 +614,27 @@ export default function SidebarList() {
                   )}
                 </div>
 
-                {/* Info & Last Message */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Top Line: Name & Time */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <h4
-                      style={{
-                        fontSize: '14.5px',
-                        fontWeight: chat.unreadCount > 0 ? 700 : 600,
-                        color: 'var(--text-primary)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        marginRight: '8px'
-                      }}
-                    >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <h4 style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {chat.name}
                     </h4>
-
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        color: chat.unreadCount > 0 ? 'var(--primary)' : 'var(--text-muted)',
-                        fontWeight: chat.unreadCount > 0 ? 600 : 400,
-                        flexShrink: 0
-                      }}
-                    >
-                      {lastMsg?.timestamp || 'Just now'}
-                    </span>
+                    {lastMsg && (
+                      <span style={{ fontSize: '11.5px', color: chat.unreadCount > 0 ? 'var(--primary)' : 'var(--text-muted)', flexShrink: 0 }}>
+                        {lastMsg.timestamp}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Bottom Line: Message Snippet & Indicators */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div
-                      style={{
-                        fontSize: '12.5px',
-                        color: isTyping ? 'var(--accent-cyan)' : (chat.unreadCount > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'),
-                        fontWeight: chat.unreadCount > 0 ? 600 : 400,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      {isTyping ? (
-                        <span>typing...</span>
-                      ) : (
-                        <>
-                          {lastMsg?.senderId === 'user_me' && (
-                            <span>
-                              {lastMsg.status === 'read' ? (
-                                <CheckCheck size={14} color="var(--tick-blue)" />
-                              ) : (
-                                <CheckCheck size={14} color="var(--tick-gray)" />
-                              )}
-                            </span>
-                          )}
-
-                          {lastMsg?.type === 'image' && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <Camera size={13} /> Photo
-                            </span>
-                          )}
-
-                          {lastMsg?.type === 'voice' && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <Mic size={13} color="var(--primary)" /> Voice note ({lastMsg.audioDuration || '0:14'})
-                            </span>
-                          )}
-
-                          {lastMsg?.type === 'document' && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <FileText size={13} /> {lastMsg.fileName}
-                            </span>
-                          )}
-
-                          {(!lastMsg?.type || lastMsg?.type === 'text') && (
-                            <span>{lastMsg?.text || 'Encrypted chat room ready'}</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Right Badges: Pin, Mute, Unread count */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
-                      {chat.muted && <VolumeX size={13} color="var(--text-muted)" />}
-                      {chat.pinned && <Pin size={13} color="var(--text-muted)" />}
-
-                      {chat.unreadCount > 0 && (
-                        <span
-                          style={{
-                            backgroundColor: 'var(--primary)',
-                            color: '#FFFFFF',
-                            fontSize: '10.5px',
-                            fontWeight: 700,
-                            minWidth: '18px',
-                            height: '18px',
-                            padding: '0 5px',
-                            borderRadius: '9999px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 6px rgba(99, 102, 241, 0.4)'
-                          }}
-                        >
-                          {chat.unreadCount}
-                        </span>
-                      )}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <p style={{ fontSize: '13px', color: isTyping ? 'var(--accent-cyan)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>
+                      {isTyping ? 'typing...' : (lastMsg?.text || chat.lastMessage || '')}
+                    </p>
+                    {chat.unreadCount > 0 && (
+                      <span style={{ minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px', backgroundColor: 'var(--primary)', color: '#FFFFFF', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {chat.unreadCount}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

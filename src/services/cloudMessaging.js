@@ -1,4 +1,5 @@
 import mqtt from 'mqtt';
+import { userRegistry } from './userRegistry';
 
 // Cloud Real-Time Messaging Service using high-speed public WebSocket brokers
 // Provides 100% free, zero-config real-time cross-device sync, discovery, and signaling
@@ -77,12 +78,17 @@ class CloudMessagingService {
 
         // Subscribe to personal inbox
         this.client.subscribe(`aether/inbox/${this.username}`, { qos: 1 });
+        // Subscribe to global persistent user registry (retained on broker)
+        this.client.subscribe('aether/registry/+', { qos: 1 });
         // Subscribe to global network presence
         this.client.subscribe('aether/presence/+', { qos: 0 });
         // Subscribe to incoming call signaling
         this.client.subscribe(`aether/calls/${this.username}`, { qos: 1 });
         // Subscribe to typing signals
         this.client.subscribe(`aether/typing/${this.username}`, { qos: 0 });
+
+        // Broadcast persistent user registration so anyone searching will find us
+        this.broadcastUserRegistration(this.profile);
 
         // Broadcast initial presence
         this.broadcastPresence();
@@ -140,9 +146,17 @@ class CloudMessagingService {
       if (this.onMessageCallback) {
         this.onMessageCallback(data);
       }
+    } else if (topic.startsWith('aether/registry/')) {
+      if (data?.username) {
+        userRegistry.updateUser(data);
+        if (this.onPresenceCallback) {
+          this.onPresenceCallback(data);
+        }
+      }
     } else if (topic.startsWith('aether/presence/')) {
       const sender = topic.replace('aether/presence/', '');
       if (sender !== this.username && this.onPresenceCallback) {
+        userRegistry.updateUser(data);
         this.onPresenceCallback(data);
       }
     } else if (topic.startsWith('aether/typing/')) {
@@ -154,6 +168,22 @@ class CloudMessagingService {
         this.onCallSignalCallback(data);
       }
     }
+  }
+
+  // Broadcast user to the persistent retained registry on MQTT
+  broadcastUserRegistration(profile) {
+    if (!this.client || !this.isConnected || !this.username) return;
+
+    const prof = profile || this.profile;
+    const payload = JSON.stringify({
+      username: this.username,
+      name: prof?.name || this.username,
+      avatar: prof?.avatar || '',
+      about: prof?.about || 'Available on AETHER',
+      registeredAt: prof?.registeredAt || Date.now()
+    });
+
+    this.client.publish(`aether/registry/${this.username}`, payload, { qos: 1, retain: true });
   }
 
   // Broadcast user's online status and profile card to the entire global network
