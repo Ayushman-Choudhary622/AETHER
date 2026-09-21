@@ -23,7 +23,8 @@ export default function NavigationRail() {
     callLogs, 
     theme, 
     toggleTheme,
-    setIsSettingsOpen
+    setIsSettingsOpen,
+    myProfile
   } = useChat();
 
   // Calculate unread badge counts
@@ -211,7 +212,7 @@ export default function NavigationRail() {
         {/* User Profile Avatar */}
         <div
           onClick={() => setIsSettingsOpen(true)}
-          title={`${currentUser.name} (${currentUser.phone})`}
+          title={`${myProfile?.name || 'Profile'} (@${myProfile?.username || 'user'})`}
           style={{
             position: 'relative',
             width: '38px',
@@ -224,8 +225,8 @@ export default function NavigationRail() {
           }}
         >
           <img
-            src={currentUser.avatar}
-            alt={currentUser.name}
+            src={myProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+            alt={myProfile?.name || 'Profile'}
             style={{
               width: '100%',
               height: '100%',

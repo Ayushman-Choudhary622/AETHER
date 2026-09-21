@@ -7,7 +7,8 @@ export default function StatusView() {
   const { 
     statuses, 
     setStoryViewer, 
-    setIsCreateStatusOpen 
+    setIsCreateStatusOpen,
+    myProfile
   } = useChat();
 
   const userStatus = statuses.find(s => s.isUser);
@@ -98,7 +99,7 @@ export default function StatusView() {
         >
           <div style={{ position: 'relative', width: '50px', height: '50px', flexShrink: 0 }}>
             <img
-              src={currentUser.avatar}
+              src={myProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
               alt="My Status"
               style={{
                 width: '100%',

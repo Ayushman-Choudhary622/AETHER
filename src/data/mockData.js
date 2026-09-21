@@ -10,6 +10,8 @@ export const defaultUserProfile = {
   hasCompletedOnboarding: false
 };
 
+export const currentUser = defaultUserProfile;
+
 // Start with empty clean-slate conversations
 export const initialChats = [];
 

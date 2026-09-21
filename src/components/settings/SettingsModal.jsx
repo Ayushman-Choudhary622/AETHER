@@ -25,15 +25,25 @@ export default function SettingsModal() {
     theme, 
     toggleTheme, 
     soundEnabled, 
-    setSoundEnabled 
+    setSoundEnabled,
+    myProfile,
+    updateMyProfile,
+    setIsProfileModalOpen
   } = useChat();
 
-  const [activeSection, setActiveSection] = useState('general'); // 'general' | 'privacy' | 'theme'
-  const [userName, setUserName] = useState(currentUser.name);
-  const [userAbout, setUserAbout] = useState(currentUser.about);
+  const [userName, setUserName] = useState(myProfile?.name || '');
+  const [userAbout, setUserAbout] = useState(myProfile?.about || '');
   const [readReceipts, setReadReceipts] = useState(true);
 
   if (!isSettingsOpen) return null;
+
+  const handleSaveAndClose = () => {
+    updateMyProfile({
+      name: userName.trim() || myProfile?.username,
+      about: userAbout.trim()
+    });
+    setIsSettingsOpen(false);
+  };
 
   return (
     <div
@@ -115,7 +125,7 @@ export default function SettingsModal() {
           >
             <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
               <img
-                src={currentUser.avatar}
+                src={myProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                 alt="Profile"
                 style={{
                   width: '100%',
@@ -126,6 +136,8 @@ export default function SettingsModal() {
                 }}
               />
               <button
+                onClick={() => setIsProfileModalOpen(true)}
+                title="Change Avatar & Handle"
                 style={{
                   position: 'absolute',
                   bottom: '-2px',
@@ -138,7 +150,8 @@ export default function SettingsModal() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: '2px solid var(--bg-modal)'
+                  border: '2px solid var(--bg-modal)',
+                  cursor: 'pointer'
                 }}
               >
                 <Camera size={12} />
@@ -176,9 +189,17 @@ export default function SettingsModal() {
                 }}
               />
 
-              <span style={{ fontSize: '11px', color: 'var(--accent-cyan)', fontWeight: 600, display: 'block', marginTop: '4px' }}>
-                {currentUser.phone} • {currentUser.handle}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                  @{myProfile?.username || 'user'}
+                </span>
+                <button
+                  onClick={() => setIsProfileModalOpen(true)}
+                  style={{ fontSize: '10.5px', color: 'var(--primary)', textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  Edit Handle
+                </button>
+              </div>
             </div>
           </div>
 
@@ -332,7 +353,7 @@ export default function SettingsModal() {
         {/* Footer */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', backgroundColor: 'var(--bg-sidebar-hover)' }}>
           <button
-            onClick={() => setIsSettingsOpen(false)}
+            onClick={handleSaveAndClose}
             style={{
               padding: '8px 22px',
               borderRadius: '12px',
@@ -340,7 +361,8 @@ export default function SettingsModal() {
               color: '#FFFFFF',
               fontSize: '13px',
               fontWeight: 600,
-              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)'
+              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+              cursor: 'pointer'
             }}
           >
             Save &amp; Close
