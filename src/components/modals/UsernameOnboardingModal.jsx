@@ -93,11 +93,12 @@ export default function UsernameOnboardingModal() {
         style={{
           width: '100%',
           maxWidth: '480px',
+          maxHeight: '92vh',
+          overflowY: 'auto',
           borderRadius: '28px',
           backgroundColor: 'var(--bg-modal)',
           border: '1px solid var(--border-glow)',
           boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), var(--shadow-glow)',
-          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           animation: 'slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)'

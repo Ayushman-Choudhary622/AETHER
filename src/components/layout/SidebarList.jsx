@@ -37,7 +37,7 @@ export default function SidebarList() {
   // If not chats tab, delegate to specialized view
   if (activeTab === 'status') {
     return (
-      <section style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      <section className="aether-sidebar-list" style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <StatusView />
       </section>
     );
@@ -45,7 +45,7 @@ export default function SidebarList() {
 
   if (activeTab === 'channels') {
     return (
-      <section style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      <section className="aether-sidebar-list" style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <ChannelsView />
       </section>
     );
@@ -53,7 +53,7 @@ export default function SidebarList() {
 
   if (activeTab === 'calls') {
     return (
-      <section style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      <section className="aether-sidebar-list" style={{ width: '400px', height: '100%', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <CallsView />
       </section>
     );
@@ -91,6 +91,7 @@ export default function SidebarList() {
 
   return (
     <section
+      className="aether-sidebar-list"
       style={{
         width: '400px',
         height: '100%',

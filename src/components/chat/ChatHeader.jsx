@@ -12,13 +12,15 @@ import {
   Trash2, 
   Download, 
   Ban, 
-  X 
+  X,
+  ChevronLeft
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 
 export default function ChatHeader() {
   const { 
     activeChat, 
+    setActiveChatId,
     startCall, 
     isContactInfoOpen, 
     setIsContactInfoOpen,
@@ -61,10 +63,21 @@ export default function ChatHeader() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
-        {/* Contact Profile Trigger */}
-        <div
-          onClick={() => setIsContactInfoOpen(prev => !prev)}
-          style={{
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {/* Mobile Back Button to return to sidebar list */}
+          <button 
+            className="mobile-back-btn" 
+            onClick={() => setActiveChatId(null)}
+            title="Back to chats"
+            aria-label="Back to chats"
+          >
+            <ChevronLeft size={24} />
+          </button>
+
+          {/* Contact Profile Trigger */}
+          <div
+            onClick={() => setIsContactInfoOpen(prev => !prev)}
+            style={{
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
@@ -156,6 +169,7 @@ export default function ChatHeader() {
             </p>
           </div>
         </div>
+      </div>
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

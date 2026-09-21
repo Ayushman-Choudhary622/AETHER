@@ -73,6 +73,7 @@ export default function ContactDrawer() {
 
   return (
     <aside
+      className="contact-drawer-aside"
       style={{
         width: '360px',
         height: '100%',

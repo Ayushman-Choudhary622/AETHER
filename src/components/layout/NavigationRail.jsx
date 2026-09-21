@@ -64,6 +64,7 @@ export default function NavigationRail() {
 
   return (
     <aside
+      className="aether-nav-rail"
       style={{
         width: '68px',
         height: '100%',
@@ -79,8 +80,9 @@ export default function NavigationRail() {
       }}
     >
       {/* Top: Brand Emblem */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+      <div className="nav-top-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
         <button
+          className="nav-brand-logo"
           onClick={() => setActiveTab('chats')}
           title="AETHER Home"
           style={{
@@ -166,7 +168,7 @@ export default function NavigationRail() {
       </div>
 
       {/* Bottom Utilities: Theme, Settings, Profile */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div className="nav-bottom-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}

@@ -9,12 +9,10 @@ import CallOverlay from './components/calls/CallOverlay';
 import NewChatModal from './components/modals/NewChatModal';
 import SettingsModal from './components/settings/SettingsModal';
 import UsernameOnboardingModal from './components/modals/UsernameOnboardingModal';
-import { ChevronLeft } from 'lucide-react';
-
 function AppContent() {
   const { activeChat, setActiveChatId } = useChat();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(Boolean(window.innerWidth < 768 && activeChat));
 
   useEffect(() => {
     const handleResize = () => {
@@ -27,7 +25,9 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (isMobile && activeChat) {
+    if (!activeChat) {
+      setShowMobileChat(false);
+    } else if (isMobile) {
       setShowMobileChat(true);
     }
   }, [activeChat, isMobile]);
@@ -44,32 +44,7 @@ function AppContent() {
         position: 'relative'
       }}
     >
-      {/* Mobile Back Header Button if in Chat */}
-      {isMobile && showMobileChat && (
-        <button
-          onClick={() => setShowMobileChat(false)}
-          style={{
-            position: 'absolute',
-            top: '14px',
-            left: '12px',
-            zIndex: 60,
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--bg-sidebar-hover)',
-            color: 'var(--primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-          }}
-        >
-          <ChevronLeft size={20} />
-        </button>
-      )}
-
-      {/* Navigation Rail (Leftmost) */}
+      {/* Navigation Rail (Left rail on desktop, bottom bar on mobile) */}
       {(!isMobile || !showMobileChat) && <NavigationRail />}
 
       {/* Sidebar List (Chats, Status, Channels, Calls) */}
