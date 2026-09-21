@@ -859,14 +859,17 @@ export function ChatProvider({ children }) {
     setIsCreateStatusOpen(false);
   };
 
-  const toggleFollowChannel = (channelId) => {
+  const toggleFollowChannel = (channelId, channelObj = null) => {
     if (soundEnabled) soundEffects.playTap();
-    setChannels(prev => prev.map(ch => {
-      if (ch.id === channelId) {
-        return { ...ch, followed: !ch.followed };
+    setChannels(prev => {
+      const exists = prev.find(ch => ch.id === channelId);
+      if (exists) {
+        return prev.filter(ch => ch.id !== channelId);
+      } else if (channelObj) {
+        return [...prev, { ...channelObj, followed: true }];
       }
-      return ch;
-    }));
+      return prev;
+    });
   };
 
   return (

@@ -3,15 +3,25 @@ import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Link2, Plus, S
 import { useChat } from '../../context/ChatContext';
 
 export default function CallsView() {
-  const { callLogs, startCall, chats } = useChat();
+  const { callLogs, startCall, chats, setIsNewChatOpen } = useChat();
+  const [copiedLink, setCopiedLink] = React.useState(false);
 
   const handleCallBack = (call) => {
     // Find contact or construct contact object
     const contact = chats.find(c => c.name === call.contactName) || {
       name: call.contactName,
-      avatar: call.avatar
+      avatar: call.avatar,
+      username: call.contactName.replace('@', '')
     };
     startCall(contact, call.type);
+  };
+
+  const handleCreateCallLink = () => {
+    const code = Math.random().toString(36).substring(2, 8);
+    const link = `https://aether.chat/call/${code}`;
+    navigator.clipboard?.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
   return (
@@ -32,11 +42,8 @@ export default function CallsView() {
         </div>
 
         <button
-          onClick={() => {
-            const firstContact = chats[0];
-            if (firstContact) startCall(firstContact, 'video');
-          }}
-          title="Start Call"
+          onClick={() => setIsNewChatOpen(true)}
+          title="New Encrypted Call"
           style={{
             width: '36px',
             height: '36px',
@@ -46,7 +53,8 @@ export default function CallsView() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)'
+            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
+            cursor: 'pointer'
           }}
         >
           <Plus size={18} />
@@ -56,6 +64,7 @@ export default function CallsView() {
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         {/* Create Call Link Banner (WhatsApp style) */}
         <div
+          onClick={handleCreateCallLink}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -64,8 +73,11 @@ export default function CallsView() {
             borderRadius: '14px',
             backgroundColor: 'var(--bg-sidebar-hover)',
             cursor: 'pointer',
-            border: '1px solid var(--border-subtle)'
+            border: '1px solid var(--border-subtle)',
+            transition: 'all 0.15s'
           }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
         >
           <div
             style={{
@@ -83,10 +95,10 @@ export default function CallsView() {
           </div>
           <div style={{ flex: 1 }}>
             <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Create call link
+              {copiedLink ? 'Link Copied to Clipboard!' : 'Create call link'}
             </h4>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Share a link for your encrypted call
+            <p style={{ fontSize: '12px', color: copiedLink ? 'var(--accent-emerald)' : 'var(--text-secondary)' }}>
+              {copiedLink ? 'Share this link to invite anyone to your call' : 'Share a link for your encrypted call'}
             </p>
           </div>
         </div>
