@@ -109,98 +109,106 @@ export default function CallsView() {
           </span>
         </div>
 
-        {/* Recent Calls List */}
+        {/* Recent Calls List or Empty State */}
         <div>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', paddingLeft: '4px' }}>
             Recent
           </span>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
-            {callLogs.map(call => {
-              const isMissed = call.status === 'missed';
-              return (
-                <div
-                  key={call.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    transition: 'background 0.2s',
-                    cursor: 'pointer'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <img
-                      src={call.avatar}
-                      alt={call.contactName}
-                      style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '50%',
-                        objectFit: 'cover'
-                      }}
-                    />
-
-                    <div>
-                      <h4
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 600,
-                          color: isMissed ? 'var(--accent-rose)' : 'var(--text-primary)'
-                        }}
-                      >
-                        {call.contactName}
-                      </h4>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                        {isMissed ? (
-                          <PhoneMissed size={14} color="var(--accent-rose)" />
-                        ) : call.direction === 'incoming' ? (
-                          <PhoneIncoming size={14} color="var(--accent-emerald)" />
-                        ) : (
-                          <PhoneOutgoing size={14} color="var(--primary)" />
-                        )}
-
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                          {call.timestamp} • {call.duration}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleCallBack(call)}
-                    title={`Call ${call.contactName}`}
+            {callLogs.length === 0 ? (
+              <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  To make audio or video calls with peers on AETHER, find their @username and tap the call button.
+                </p>
+              </div>
+            ) : (
+              callLogs.map(call => {
+                const isMissed = call.status === 'missed';
+                return (
+                  <div
+                    key={call.id}
                     style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--bg-sidebar-hover)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--primary)',
-                      border: '1px solid var(--border-subtle)',
-                      transition: 'all 0.2s'
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      transition: 'background 0.2s',
+                      cursor: 'pointer'
                     }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = 'var(--primary)';
-                      e.currentTarget.style.color = '#FFFFFF';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)';
-                      e.currentTarget.style.color = 'var(--primary)';
-                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    {call.type === 'video' ? <Video size={17} /> : <Phone size={17} />}
-                  </button>
-                </div>
-              );
-            })}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <img
+                        src={call.avatar}
+                        alt={call.contactName}
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '50%',
+                          objectFit: 'cover'
+                        }}
+                      />
+
+                      <div>
+                        <h4
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: isMissed ? 'var(--accent-rose)' : 'var(--text-primary)'
+                          }}
+                        >
+                          {call.contactName}
+                        </h4>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          {isMissed ? (
+                            <PhoneMissed size={14} color="var(--accent-rose)" />
+                          ) : call.direction === 'incoming' ? (
+                            <PhoneIncoming size={14} color="var(--accent-emerald)" />
+                          ) : (
+                            <PhoneOutgoing size={14} color="var(--primary)" />
+                          )}
+
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            {call.timestamp} • {call.duration}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleCallBack(call)}
+                      title={`Call ${call.contactName}`}
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--bg-sidebar-hover)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--primary)',
+                        border: '1px solid var(--border-subtle)',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.backgroundColor = 'var(--primary)';
+                        e.currentTarget.style.color = '#FFFFFF';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-sidebar-hover)';
+                        e.currentTarget.style.color = 'var(--primary)';
+                      }}
+                    >
+                      {call.type === 'video' ? <Video size={17} /> : <Phone size={17} />}
+                    </button>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { initialChats, initialStatuses, initialChannels, initialCalls, currentUser } from '../data/mockData';
+import { initialChats, initialStatuses, initialChannels, initialCalls, defaultUserProfile } from '../data/mockData';
 import { soundEffects } from '../utils/audio';
 import { cloudMessaging } from '../services/cloudMessaging';
 import { webrtcService } from '../services/webrtcService';
@@ -31,16 +31,14 @@ export function ChatProvider({ children }) {
   const [myProfile, setMyProfile] = useState(() => {
     const saved = localStorage.getItem('aether_my_profile');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.username && parsed.hasCompletedOnboarding) {
+          return parsed;
+        }
+      } catch (e) {}
     }
-    return {
-      username: 'ayushman',
-      name: 'Ayushman Choudhary',
-      handle: '@ayushman',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      about: 'Building the next-generation private web 🛡️⚡',
-      phone: '+1 (555) 782-9012'
-    };
+    return defaultUserProfile;
   });
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -51,7 +49,8 @@ export function ChatProvider({ children }) {
       ...myProfile,
       ...newProfile,
       username: cleanUsername,
-      handle: `@${cleanUsername}`
+      handle: `@${cleanUsername}`,
+      hasCompletedOnboarding: true
     };
     setMyProfile(updated);
     localStorage.setItem('aether_my_profile', JSON.stringify(updated));
@@ -60,11 +59,33 @@ export function ChatProvider({ children }) {
   // Discovered Network Users (Real-Time Global Registry via MQTT Presence)
   const [discoveredUsers, setDiscoveredUsers] = useState({});
 
-  // Chats State
+  // Auto-purge any obsolete mock/prebuilt data from legacy sessions
+  useEffect(() => {
+    const isCleaned = localStorage.getItem('aether_clean_slate_v3');
+    if (!isCleaned) {
+      localStorage.removeItem('aether_chats');
+      localStorage.removeItem('aether_statuses');
+      localStorage.removeItem('aether_channels');
+      localStorage.removeItem('aether_calls');
+      localStorage.setItem('aether_clean_slate_v3', 'true');
+      setChats([]);
+      setStatuses(initialStatuses);
+      setChannels([]);
+      setCallLogs([]);
+      setActiveChatId(null);
+    }
+  }, []);
+
+  // Chats State - Starts 100% empty
   const [chats, setChats] = useState(() => {
     const saved = localStorage.getItem('aether_chats');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(c => !/^chat_[1-6]$/.test(c.id) && c.username);
+        }
+      } catch (e) {}
     }
     return initialChats;
   });
@@ -73,18 +94,24 @@ export function ChatProvider({ children }) {
     localStorage.setItem('aether_chats', JSON.stringify(chats));
   }, [chats]);
 
-  // Active Chat Selection
-  const [activeChatId, setActiveChatId] = useState('chat_1');
-  const activeChat = chats.find(c => c.id === activeChatId) || chats[0];
+  // Active Chat Selection (null by default when no chat is open)
+  const [activeChatId, setActiveChatId] = useState(null);
+  const activeChat = chats.find(c => c.id === activeChatId) || null;
 
   // Right Drawer: Contact Info
   const [isContactInfoOpen, setIsContactInfoOpen] = useState(false);
 
-  // Status / Stories State
+  // Status / Stories State - Starts with only user's own status (0 contacts' stories)
   const [statuses, setStatuses] = useState(() => {
     const saved = localStorage.getItem('aether_statuses');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const userOnly = parsed.filter(s => s.isUser);
+          if (userOnly.length > 0) return userOnly;
+        }
+      } catch (e) {}
     }
     return initialStatuses;
   });
@@ -93,11 +120,16 @@ export function ChatProvider({ children }) {
     localStorage.setItem('aether_statuses', JSON.stringify(statuses));
   }, [statuses]);
 
-  // Channels State
+  // Channels State - 100% Clean slate (0 prebuilt channels)
   const [channels, setChannels] = useState(() => {
     const saved = localStorage.getItem('aether_channels');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(ch => ch.id !== 'chan_aether' && ch.id !== 'chan_1' && ch.id !== 'chan_2');
+        }
+      } catch (e) {}
     }
     return initialChannels;
   });
@@ -106,11 +138,16 @@ export function ChatProvider({ children }) {
     localStorage.setItem('aether_channels', JSON.stringify(channels));
   }, [channels]);
 
-  // Calls Log
+  // Calls Log - 100% Clean slate
   const [callLogs, setCallLogs] = useState(() => {
     const saved = localStorage.getItem('aether_calls');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(c => !/^call_[1-6]$/.test(c.id));
+        }
+      } catch (e) {}
     }
     return initialCalls;
   });
@@ -360,60 +397,6 @@ export function ChatProvider({ children }) {
       }));
     }, 500);
 
-    // If it is one of the initial sample contacts (e.g. Sophia, Alex), run the interactive assistant simulation
-    if (activeChat.id.startsWith('chat_') && parseInt(activeChat.id.replace('chat_', '')) <= 6) {
-      triggerSimulatedContactReply(activeChat.id, text);
-    }
-  };
-
-  // Simulated Reply Generator for Demo Contacts
-  const triggerSimulatedContactReply = (targetChatId, userPrompt) => {
-    const targetChat = chats.find(c => c.id === targetChatId);
-    if (!targetChat || targetChat.type === 'channel') return;
-
-    setTimeout(() => {
-      setTypingContacts(prev => ({ ...prev, [targetChatId]: true }));
-    }, 1200);
-
-    setTimeout(() => {
-      setTypingContacts(prev => {
-        const next = { ...prev };
-        delete next[targetChatId];
-        return next;
-      });
-
-      const replyPool = [
-        "Received on the encrypted network! Verified key fingerprint matches. 🛡️",
-        "The decentralized real-time sync is working with zero delay! 🚀",
-        "Looks fantastic! Let me know if you want to test WebRTC HD audio/video calling.",
-        "Got your message! Staging cluster is responding with 100% fidelity. ✨"
-      ];
-
-      const incomingMsg = {
-        id: 'reply_' + Date.now(),
-        senderId: 'contact',
-        senderName: targetChat.name,
-        type: 'text',
-        text: replyPool[Math.floor(Math.random() * replyPool.length)],
-        timestamp: getCurrentTimeString(),
-        status: 'read'
-      };
-
-      if (soundEnabled) {
-        soundEffects.playReceived();
-      }
-
-      setChats(prev => prev.map(c => {
-        if (c.id === targetChatId) {
-          return {
-            ...c,
-            unreadCount: c.id === activeChatId ? 0 : (c.unreadCount || 0) + 1,
-            messages: [...c.messages, incomingMsg]
-          };
-        }
-        return c;
-      }));
-    }, 3200);
   };
 
   // Call Initiation with WebRTC
